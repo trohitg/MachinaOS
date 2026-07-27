@@ -26,8 +26,9 @@ Run any Apify actor and retrieve scraped results.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | actor_id | string | Yes | Actor ID from Apify Store (e.g., `apify/instagram-scraper`) |
-| input_json | string | No | Actor input as JSON string (default: `{}`) |
+| actor_input | object or JSON string | No | Actor input merged with preset fields (default: `{}`) |
 | max_results | integer | No | Maximum items to return (default: 100) |
+| max_total_charge_usd | number | No | Optional whole-run spending cap in USD |
 
 ### Popular Actors
 
@@ -36,6 +37,8 @@ Run any Apify actor and retrieve scraped results.
 | Instagram | `apify/instagram-scraper` | Profiles, posts, hashtags, comments |
 | TikTok | `clockworks/tiktok-scraper` | Videos, profiles, trends, hashtags |
 | Twitter/X | `apidojo/tweet-scraper` | Tweets, profiles, search results |
+| X posts | [`xquik/x-tweet-scraper`](https://apify.com/xquik/x-tweet-scraper) | Search, timelines, tweets, threads, replies, quotes |
+| X audiences | [`xquik/x-follower-scraper`](https://apify.com/xquik/x-follower-scraper) | Followers, following, lists, communities, overlap |
 | LinkedIn | `curious_coder/linkedin-profile-scraper` | Profiles, companies |
 | Facebook | `apify/facebook-posts-scraper` | Posts, pages, groups |
 | YouTube | `apify/youtube-scraper` | Videos, channels, comments |
@@ -68,7 +71,7 @@ Run any Apify actor and retrieve scraped results.
 ```json
 {
   "actor_id": "apify/instagram-scraper",
-  "input_json": "{\"directUrls\": [\"https://instagram.com/natgeo\"], \"resultsLimit\": 50}",
+  "actor_input": {"directUrls": ["https://instagram.com/natgeo"], "resultsLimit": 50},
   "max_results": 50
 }
 ```
@@ -77,7 +80,7 @@ Run any Apify actor and retrieve scraped results.
 ```json
 {
   "actor_id": "clockworks/tiktok-scraper",
-  "input_json": "{\"hashtags\": [\"trending\", \"fyp\"], \"resultsPerPage\": 30}",
+  "actor_input": {"hashtags": ["trending", "fyp"], "resultsPerPage": 30},
   "max_results": 30
 }
 ```
@@ -86,8 +89,37 @@ Run any Apify actor and retrieve scraped results.
 ```json
 {
   "actor_id": "apidojo/tweet-scraper",
-  "input_json": "{\"searchTerms\": [\"AI automation\"], \"maxItems\": 100}",
+  "actor_input": {"searchTerms": ["AI automation"], "maxItems": 100},
   "max_results": 100
+}
+```
+
+**Search X with Xquik:**
+```json
+{
+  "actor_id": "xquik/x-tweet-scraper",
+  "actor_input": {
+    "mode": "search",
+    "searchTerms": ["AI automation", "#buildinpublic"],
+    "maxItems": 100,
+    "outputVariant": "rich"
+  },
+  "max_results": 100
+}
+```
+
+**Compare X audiences with Xquik:**
+```json
+{
+  "actor_id": "xquik/x-follower-scraper",
+  "actor_input": {
+    "twitterHandles": ["openai", "nasa"],
+    "relation": "followers",
+    "maxItems": 200,
+    "maxItemsPerTarget": 100,
+    "overlapMode": true
+  },
+  "max_results": 200
 }
 ```
 
@@ -95,7 +127,7 @@ Run any Apify actor and retrieve scraped results.
 ```json
 {
   "actor_id": "apify/google-search-scraper",
-  "input_json": "{\"queries\": \"best AI tools 2026\", \"maxPagesPerQuery\": 3}",
+  "actor_input": {"queries": "best AI tools 2026", "maxPagesPerQuery": 3},
   "max_results": 30
 }
 ```
@@ -104,7 +136,11 @@ Run any Apify actor and retrieve scraped results.
 ```json
 {
   "actor_id": "apify/website-content-crawler",
-  "input_json": "{\"startUrls\": [{\"url\": \"https://docs.example.com\"}], \"maxCrawlDepth\": 2, \"maxCrawlPages\": 50}",
+  "actor_input": {
+    "startUrls": [{"url": "https://docs.example.com"}],
+    "maxCrawlDepth": 2,
+    "maxCrawlPages": 50
+  },
   "max_results": 50
 }
 ```
@@ -113,7 +149,10 @@ Run any Apify actor and retrieve scraped results.
 ```json
 {
   "actor_id": "apify/google-maps-scraper",
-  "input_json": "{\"searchStringsArray\": [\"restaurants in San Francisco\"], \"maxCrawledPlaces\": 20}",
+  "actor_input": {
+    "searchStringsArray": ["restaurants in San Francisco"],
+    "maxCrawledPlaces": 20
+  },
   "max_results": 20
 }
 ```
@@ -141,6 +180,26 @@ Run any Apify actor and retrieve scraped results.
 | searchTerms | array | Search queries or hashtags |
 | twitterHandles | array | Usernames (without @) |
 | maxItems | number | Maximum tweets to fetch |
+
+### Xquik X Tweet Scraper
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| mode | string | Route such as `search`, `profileTweets`, `thread`, or `replies` |
+| searchTerms | array | Run several X searches in one Actor run |
+| twitterHandles | array | Collect timelines for X handles |
+| maxItems | number | Cap results across the whole run |
+| maxItemsPerTarget | number | Optionally cap each explicit target |
+| outputVariant | string | Return `legacy`, `rich`, or `raw` results |
+
+### Xquik X Follower Scraper
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| twitterHandles | array | X handles to inspect |
+| relation | string | Collect `followers`, `following`, or `verified_followers` |
+| maxItems | number | Cap results across the whole run |
+| maxItemsPerTarget | number | Optionally cap each target |
+| outputMode | string | Return `compact`, `full`, or `raw` profiles |
+| overlapMode | boolean | Merge duplicate profiles and report audience overlap |
 
 ### Google Search Scraper
 | Parameter | Type | Description |
@@ -215,10 +274,9 @@ Run any Apify actor and retrieve scraped results.
 
 ## Pricing Notes
 
-Apify uses compute units (CU) based on memory and duration:
-- CU = Memory (GB) x Duration (hours)
-- Free tier: $5/month credits
-- Check actor pricing on Apify Store before large scrapes
+Pricing differs by Actor and can change. Check the Actor's current Apify Store
+pricing before every large run. Set explicit result limits in Actor input and
+use `max_total_charge_usd` for a whole-run spending cap.
 
 ## Setup Requirements
 
@@ -234,3 +292,6 @@ Apify uses compute units (CU) based on memory and duration:
 3. Don't scrape personal data without consent
 4. Store scraped data securely
 5. Comply with GDPR and data protection laws
+6. Confirm scope and cost before starting paid Actor runs
+
+Xquik is an independent third-party service. Not affiliated with X Corp. "Twitter" and "X" are trademarks of X Corp.

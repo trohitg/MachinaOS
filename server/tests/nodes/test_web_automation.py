@@ -14,12 +14,13 @@ All external side-effects are mocked:
 
 from __future__ import annotations
 
+from datetime import timedelta
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from tests.nodes._mocks import patched_container
-
 
 pytestmark = pytest.mark.node_contract
 
@@ -80,7 +81,7 @@ class TestBrowser:
         assert payload["data"]["url"] == "https://example.com"
 
         # Verify the handler mapped navigate -> [open, URL]
-        args, session, timeout, _ = fake.calls[-1]
+        args, session, _timeout, _ = fake.calls[-1]
         assert args == ("open", "https://example.com")
         assert session == "test_sess"
 
@@ -379,8 +380,98 @@ class TestApifyActor:
             "https://instagram.com/b",
         ]
         assert call_kwargs["memory_mbytes"] == 1024  # default
+        assert call_kwargs["run_timeout"] == timedelta(seconds=300)
+        assert "timeout_secs" not in call_kwargs
         # dataset list called with the right limit
         fake_client.dataset.return_value.list_items.assert_awaited_once_with(limit=50)
+
+    async def test_xquik_tweet_preset_builds_live_actor_input(self, harness):
+        run_info = {
+            "id": "run_tweets",
+            "status": "SUCCEEDED",
+            "defaultDatasetId": "ds_tweets",
+        }
+        fake_client = _make_fake_apify_client(run_info=run_info, items=[])
+
+        with (
+            patched_container(auth_api_keys={"apify": "tk"}),
+            patch(
+                "apify_client.ApifyClientAsync",
+                return_value=fake_client,
+            ),
+        ):
+            result = await harness.execute(
+                "apifyActor",
+                {
+                    "actor_id": "xquik/x-tweet-scraper",
+                    "actor_input": {"lang": "en"},
+                    "twitter_search_terms": "AI automation, #buildinpublic",
+                    "xquik_tweet_mode": "search",
+                    "xquik_tweet_output_variant": "rich",
+                    "xquik_max_items": 40,
+                    "xquik_max_items_per_target": 20,
+                    "max_total_charge_usd": 1.5,
+                },
+            )
+
+        harness.assert_envelope(result, success=True)
+        actor_client = fake_client.actor
+        actor_client.assert_called_once_with("xquik/x-tweet-scraper")
+        run_input = actor_client.return_value.call.await_args.kwargs["run_input"]
+        assert run_input == {
+            "lang": "en",
+            "searchTerms": ["AI automation", "#buildinpublic"],
+            "mode": "search",
+            "outputVariant": "rich",
+            "maxItems": 40,
+            "maxItemsPerTarget": 20,
+        }
+        assert actor_client.return_value.call.await_args.kwargs["max_total_charge_usd"] == Decimal(
+            "1.5",
+        )
+
+    async def test_xquik_follower_preset_builds_live_actor_input(self, harness):
+        run_info = {
+            "id": "run_followers",
+            "status": "SUCCEEDED",
+            "defaultDatasetId": "ds_followers",
+        }
+        fake_client = _make_fake_apify_client(run_info=run_info, items=[])
+
+        with (
+            patched_container(auth_api_keys={"apify": "tk"}),
+            patch(
+                "apify_client.ApifyClientAsync",
+                return_value=fake_client,
+            ),
+        ):
+            result = await harness.execute(
+                "apifyActor",
+                {
+                    "actor_id": "xquik/x-follower-scraper",
+                    "actor_input": {"bioContains": "engineer"},
+                    "twitter_handles": "@openai, nasa",
+                    "xquik_follower_relation": "verified_followers",
+                    "xquik_follower_output_mode": "full",
+                    "xquik_overlap_mode": True,
+                    "xquik_max_items": 100,
+                    "xquik_max_items_per_target": 50,
+                },
+            )
+
+        harness.assert_envelope(result, success=True)
+        actor_client = fake_client.actor
+        actor_client.assert_called_once_with("xquik/x-follower-scraper")
+        run_input = actor_client.return_value.call.await_args.kwargs["run_input"]
+        assert run_input == {
+            "bioContains": "engineer",
+            "twitterHandles": ["@openai", "nasa"],
+            "relation": "verified_followers",
+            "outputMode": "full",
+            "overlapMode": True,
+            "maxItems": 100,
+            "maxItemsPerTarget": 50,
+        }
 
     async def test_missing_api_token_short_circuits(self, harness):
         # container returns no 'apify' key -> _get_apify_client returns None

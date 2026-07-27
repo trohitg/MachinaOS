@@ -100,7 +100,7 @@ dependencies = [
     "xdk>=0.1.0",
 
     # Apify Web Scraping
-    "apify-client>=1.8.0",
+    "apify-client>=3.0.5",
 
     # Crawlee Web Scraping
     "crawlee[beautifulsoup]>=1.4.0",

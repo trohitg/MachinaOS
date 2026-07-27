@@ -443,7 +443,9 @@ class TestPhase3dIICoverage:
 
     def test_apify_actor_actor_id_field(self):
         spec = get_node_spec("apifyActor")
-        assert "actor_id" in spec["inputs"]["properties"]
+        actor_id = spec["inputs"]["properties"]["actor_id"]
+        assert "xquik/x-tweet-scraper" in actor_id["enum"]
+        assert "xquik/x-follower-scraper" in actor_id["enum"]
 
     def test_proxy_request_method_enum(self):
         spec = get_node_spec("proxyRequest")
