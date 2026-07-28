@@ -107,7 +107,7 @@ fake-useragent==2.2.0
     # via ddgs
 fastapi==0.139.0
     # via opencompany-server
-filelock==3.29.7
+filelock==3.31.1
     # via tldextract
 filetype==1.2.0
     # via langchain-google-genai
