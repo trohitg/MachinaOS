@@ -548,7 +548,7 @@ watchfiles==1.2.0
     # via uvicorn
 webencodings==0.5.1
     # via html5lib
-websockets==15.0.1
+websockets==16.1.1
     # via
     #   google-genai
     #   langsmith
