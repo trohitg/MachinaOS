@@ -2,7 +2,7 @@
 #    uv export --frozen --no-emit-project --no-hashes --no-dev -o requirements.txt
 aiohappyeyeballs==2.7.1
     # via aiohttp
-aiohttp==3.14.1
+aiohttp==3.14.2
     # via opencompany-server
 aiosignal==1.4.0
     # via aiohttp
