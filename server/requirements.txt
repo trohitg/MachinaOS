@@ -223,7 +223,7 @@ langchain-anthropic==1.4.6
     # via opencompany-server
 langchain-cerebras==0.8.2
     # via opencompany-server
-langchain-core==1.4.9
+langchain-core==1.5.0
     # via
     #   langchain-anthropic
     #   langchain-cerebras
