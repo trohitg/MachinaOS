@@ -419,7 +419,7 @@ tinytag==2.2.1
     # via opencompany-server
 tldextract==5.3.1
     # via crawlee
-tqdm==4.68.4
+tqdm==4.70.0
     # via
     #   openai
     #   portkey-ai
