@@ -342,7 +342,7 @@ python-slugify==8.0.4
     # via opencompany-server
 python-telegram-bot==22.8
     # via opencompany-server
-pytz==2026.2
+pytz==2026.3.post1
     # via opencompany-server
 pywin32==312 ; sys_platform == 'win32'
     # via mcp
