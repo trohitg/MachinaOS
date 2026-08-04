@@ -254,7 +254,7 @@ packaging==26.2
     #   pytest
 pillow==12.3.0
     # via qrcode
-platformdirs==4.10.0
+platformdirs==4.11.0
     # via pooch
 pluggy==1.6.0
     # via pytest
