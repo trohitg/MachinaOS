@@ -99,6 +99,81 @@ class OpenRouterCredential(_LLMApiKey):
     docs_url = "https://openrouter.ai/keys"
 
 
+class LLMTRCredential(_LLMApiKey):
+    """LLMTR gateway key — the one LLM credential that cannot validate
+    itself by listing models.
+
+    The inherited :meth:`_LLMApiKey._probe` treats a successful
+    ``fetch_models`` as proof the key works, which holds for every other
+    provider here because their ``/v1/models`` is authenticated. LLMTR's
+    is **public**: it answers 200 with no ``Authorization`` header at all,
+    and 200 with a deliberately invalid one (verified against the live
+    endpoint). Inheriting the default would therefore mark literally any
+    string — including an empty-ish typo — as a validated key, and the
+    user would only discover otherwise when a workflow run failed.
+
+    So the probe is a 1-token chat completion instead: the cheapest call
+    on the OpenAI wire format that actually consults the key. LLMTR
+    answers a bad key with ``401 {"error":{"message":"Invalid API key"}}``,
+    which the openai SDK raises as ``AuthenticationError`` — an
+    ``openai.OpenAIError`` subclass that ``Credential.validate`` already
+    classifies via :func:`classify_credential_error`. Same trade Sarvam
+    makes for its missing model-list route; the difference is that Sarvam
+    has no route to be fooled by, while LLMTR has one that always says
+    yes.
+
+    The model list is still served from the real catalogue (filtered to
+    chat-capable rows by ``LLMTRProvider.fetch_models``) so the dropdown
+    populates exactly as it does for OpenRouter.
+    """
+
+    id = "llmtr"
+    display_name = "LLMTR"
+    docs_url = "https://llmtr.com/docs"
+
+    @classmethod
+    async def _probe(cls, api_key: str) -> ProbeResult:
+        from services.llm.config import get_default_model
+        from services.llm.protocol import Message
+        from services.plugin.deps import get_ai_service
+
+        ai_service = get_ai_service()
+        unifier = ai_service.chat_unifier
+        if unifier is None:
+            raise RuntimeError(
+                "ChatUnifier is not injected. AIService must be constructed "
+                "via the DI container (core.container.Container)."
+            )
+
+        # Order matters: authenticate FIRST, list second. A key that fails
+        # must never reach the point of returning a populated model list,
+        # or the modal shows a filled dropdown next to a red error.
+        #
+        # translate_errors=False makes the unifier raise its structured
+        # ``LLMError`` (carrying category + HTTP status) instead of
+        # collapsing it into a ``NodeUserError`` whose text a classifier
+        # can only re-wrap. ``classify_credential_error`` reads that
+        # status directly and answers "LLMTR rejected the API key."
+        # Note it is NOT the raw ``openai.AuthenticationError`` — the
+        # unifier consumed that in ``LLMError.from_exception``.
+        await unifier.chat(
+            provider=cls.id,
+            api_key=api_key,
+            model=get_default_model(cls.id),
+            messages=[Message(role="user", content="hi")],
+            max_tokens=1,
+            temperature=0.0,
+            translate_errors=False,
+        )
+
+        models = await ai_service.fetch_models(cls.id, api_key)
+        return ProbeResult(
+            valid=True,
+            message="API key validated",
+            models=models,
+        )
+
+
 class GroqCredential(_LLMApiKey):
     id = "groq"
     display_name = "Groq"

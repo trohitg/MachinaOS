@@ -359,6 +359,35 @@
       "temperature_range": [0.0, 2.0]
     },
 
+    "llmtr": {
+      "_description": "LLMTR (llmtr.com) — Turkish multi-vendor LLM gateway, OpenAI-compatible at llmtr.com/v1. Same SHAPE as openrouter: one key fronts many vendors and model ids are `vendor/model` (openai/gpt-4o, anthropic/claude-sonnet-5, llmtr/trendyol-7b). That naming is why `llmtr` is in the open-world tuple in services/llm/config.py::is_model_valid_for_provider AND in _ROUTER_PROVIDERS in services/model_registry.py — no llmtr model id contains the substring 'llmtr' except its own self-hosted rows, so the cloud-style pattern check would reject every valid model, and the vendor-prefixed ids resolve their real context/output limits out of the OpenRouter cache by stripping the prefix.",
+      "default_model": "anthropic/claude-sonnet-5",
+      "popular_models": [
+        "anthropic/claude-sonnet-5",
+        "openai/gpt-5.4",
+        "google/gemini-3.6-flash",
+        "qwen/qwen3.8-max",
+        "deepseek/deepseek-v4-pro",
+        "llmtr/gemma-4",
+        "llmtr/trendyol-7b"
+      ],
+      "_popular_note": "Curated cross-vendor spread plus the two Turkey-hosted llmtr rows. Exempt from the >=1M-context global-list policy the same way openrouter's vendor-prefixed ids are: no per-model context_length is declared here because the true windows live in the router cache (config/model_registry.json), which the _ROUTER_PROVIDERS cross-lookup reaches by stripping the vendor prefix.",
+      "detection_patterns": ["llmtr"],
+      "base_url": "https://llmtr.com/v1",
+      "models_endpoint": "https://llmtr.com/v1/models",
+      "_models_listing_note": "GET /v1/models is PUBLIC (200 with no key, and 200 with an invalid key) and returns all 229 catalogue rows — chat, embeddings, image, video, rerank. Two consequences, both handled outside this file. (1) The list must be filtered to supported_operations containing CHAT_COMPLETIONS or the chat dropdown fills with voyageai embeddings and recraft image models that 404 on /v1/chat/completions; that filter lives in services/llm/providers/llmtr.py. (2) Because the route ignores the Authorization header, the default _LLMApiKey._probe (which just calls fetch_models) would accept ANY string as a valid key — LLMTRCredential._probe therefore overrides it with a 1-token chat completion, the cheapest call that actually returns 401 'Invalid API key'.",
+      "api_key_param": "api_key",
+      "max_tokens_param": "max_tokens",
+      "routes_vendor_prefixed_models": true,
+      "vendor_aliases": {"google": "gemini", "moonshot": "kimi", "x-ai": "xai"},
+      "_routing_note": "Turns on the gateway branch in OpenAIProvider._model_policy: the WIRE SHAPE (max_completion_tokens vs max_tokens, whether temperature may be sent) is resolved against the routed VENDOR's block, because those are properties of the model that ultimately serves the call. Verified live: openai/o4-mini and openai/gpt-5-nano both 400 ('The model provider rejected the request') when sent max_tokens + temperature, and both succeed on max_completion_tokens with temperature omitted. vendor_aliases maps LLMTR's prefix spelling onto our provider keys; an unlisted vendor (qwen, zai, minimax, llmtr's own rows, ...) keeps this generic block, which is the right conservative default. THINKING is deliberately NOT vendor-resolved — see thinking_type below.",
+      "thinking_type": "effort",
+      "_thinking_note": "LLMTR normalizes reasoning across vendors onto the OpenAI-style reasoning_effort parameter — its anthropic/* and google/* rows accept reasoning_effort even though those vendors natively take token budgets, and an extra_body thinking budget is silently ignored. So the gateway's own type is 'effort' regardless of who serves the model, and adopting the vendor's native type would emit proprietary extra_body LLMTR never documented. Support is per-model: unsupported rows answer 400 with details.supportsReasoningToggle=false ('This model does not expose a thinking mode'), which at time of writing includes every openai/* row while anthropic/* and google/* accept it. That 400 only occurs when the user explicitly ticks thinking, and surfacing it is better than silently dropping the setting and reporting reasoning that never ran.",
+      "max_output_tokens": {"_default": 4096},
+      "context_length": {"_default": 128000},
+      "temperature_range": [0.0, 2.0]
+    },
+
     "ollama": {
       "_description": "Local Ollama server (OpenAI-compatible /v1). No `default_model` because the dropdown should reflect the user's actually-pulled models — fetch_models hits the user's saved {provider}_proxy URL and returns whatever Ollama reports; when the server is offline we want an empty list (a 'start your server' cue), not a placeholder name the user almost certainly doesn't have.",
       "detection_patterns": ["ollama"],

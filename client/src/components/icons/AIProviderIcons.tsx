@@ -83,6 +83,15 @@ export const SarvamIcon: React.FC<{ size?: number }> = ({ size = ICON_SIZE }) =>
   <img src={SARVAM_ICON_URL} alt="Sarvam AI" width={size} height={size} />
 );
 
+// LLMTR (llmtr.com) — Turkish multi-vendor gateway. Same situation as
+// Sarvam: no @lobehub/icons brand entry, so the mark is served by the
+// backend credential-icon endpoint (server/credentials/icons/llmtr.svg).
+const LLMTR_ICON_URL = `${API_CONFIG.PYTHON_BASE_URL}/api/schemas/credentials/llmtr/icon`;
+
+export const LLMTRIcon: React.FC<{ size?: number }> = ({ size = ICON_SIZE }) => (
+  <img src={LLMTR_ICON_URL} alt="LLMTR" width={size} height={size} />
+);
+
 // Map provider IDs to their icon components
 export const AI_PROVIDER_ICONS: Record<string, React.FC<{ size?: number }>> = {
   openai: OpenAIIcon,
@@ -90,6 +99,7 @@ export const AI_PROVIDER_ICONS: Record<string, React.FC<{ size?: number }>> = {
   gemini: GeminiIcon,
   groq: GroqIcon,
   openrouter: OpenRouterIcon,
+  llmtr: LLMTRIcon,
   cerebras: CerebrasIcon,
   deepseek: DeepSeekIcon,
   kimi: KimiIcon,
@@ -111,6 +121,8 @@ export const AI_PROVIDER_META: Record<string, { iconRef: string; Icon: React.FC<
   groq:       { iconRef: 'lobehub:Groq',       Icon: GroqIcon,       color: dracula.red,      label: 'Groq' },
   cerebras:   { iconRef: 'lobehub:Cerebras',   Icon: CerebrasIcon,   color: dracula.orange,   label: 'Cerebras' },
   openrouter: { iconRef: 'lobehub:OpenRouter', Icon: OpenRouterIcon, color: solarized.violet, label: 'OpenRouter' },
+  // No lobehub brand — iconRef points at the backend-served SVG instead.
+  llmtr:      { iconRef: '/api/schemas/credentials/llmtr/icon', Icon: LLMTRIcon, color: '#E11D48', label: 'LLMTR' },
   deepseek:   { iconRef: 'lobehub:DeepSeek',   Icon: DeepSeekIcon,   color: dracula.cyan,     label: 'DeepSeek' },
   kimi:       { iconRef: 'lobehub:Kimi',       Icon: KimiIcon,       color: dracula.purple,   label: 'Kimi' },
   mistral:    { iconRef: 'lobehub:Mistral',    Icon: MistralIcon,    color: dracula.pink,     label: 'Mistral' },

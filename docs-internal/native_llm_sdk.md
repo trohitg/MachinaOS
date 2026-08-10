@@ -43,6 +43,7 @@ server/services/llm/
     |-- openai.py         OpenAIProvider (openai SDK)
     |-- gemini.py         GeminiProvider (google-genai SDK)
     |-- openrouter.py     OpenRouterProvider (extends OpenAIProvider with headers)
+    |-- llmtr.py          LLMTRProvider (extends OpenAIProvider; filters its mixed-modality catalogue)
     `-- _compat.py        Registers the 9 OpenAI-compatible providers (xai, deepseek, kimi,
                           mistral, groq, cerebras, ollama, lmstudio, sarvam) via base_url specs
 ```
@@ -54,7 +55,7 @@ providers share `_compat.py` and its explicit `_COMPAT_PROVIDERS` tuple.
 
 ## Supported Providers
 
-The native layer currently supports **13 providers**, grouped by implementation:
+The native layer currently supports **14 providers** (12 cloud plus Ollama / LM Studio), grouped by implementation:
 
 | Provider | Implementation | SDK | Notes |
 |---|---|---|---|
@@ -62,6 +63,29 @@ The native layer currently supports **13 providers**, grouped by implementation:
 | `openai` | `providers/openai.py` | `openai` | Reasoning models (o1/o3) and GPT-5 hybrid thinking |
 | `gemini` | `providers/gemini.py` | `google-genai` | Direct SDK (Windows hang fix) |
 | `openrouter` | `providers/openrouter.py` | `openai` | Sets `HTTP-Referer` + `X-Title` headers |
+| `llmtr` | `providers/llmtr.py` | `openai` | Turkish multi-vendor gateway at `llmtr.com/v1`. Second **gateway** here, so it shares OpenRouter's shape: `vendor/model` ids, hence membership in the open-world tuple (`is_model_valid_for_provider`) and in `_ROUTER_PROVIDERS` (`model_registry`), which recovers real context/output limits from the router cache by stripping the vendor prefix. Overrides `fetch_models` because the catalogue is **mixed-modality** — 229 rows of which only 165 accept `/v1/chat/completions`; the filter keys on the published `supported_operations` field. `GET /v1/models` is **public** (200 with an invalid key), so `LLMTRCredential._probe` validates with a 1-token completion instead of a model list. Declares `routes_vendor_prefixed_models` — see "Gateway providers" below. Also a selectable **embedding** provider (`services/memory/vector_store.py`). |
+
+### Gateway providers (`routes_vendor_prefixed_models`)
+
+A gateway fronts many vendors behind one key and names models `vendor/model`.
+Two different sources of truth apply to such a request, and `OpenAIProvider._model_policy`
+resolves them **separately** (opt-in per provider via the JSON flag, so no existing
+provider changes behaviour):
+
+| Concern | Source | Why |
+|---|---|---|
+| **Wire shape** — `max_completion_tokens` vs `max_tokens`, whether `temperature` may be sent | the routed **vendor's** block, via `vendor_aliases` | These are properties of the model that ultimately serves the call. `openai/o4-mini` refuses `max_tokens` + `temperature` whether reached directly or through a proxy — verified live: both `openai/o4-mini` and `openai/gpt-5-nano` returned 400 ("the model provider rejected the request") until the vendor block was consulted. |
+| **Thinking** — `reasoning_effort` / `extra_body` budgets | the **gateway's** own block | Reasoning is not forwarded vendor-natively. LLMTR normalizes every vendor onto `reasoning_effort` (its Anthropic and Google rows accept it although those vendors natively take token budgets), silently drops an `extra_body` budget, and answers 400 with `details.supportsReasoningToggle: false` for models it has not enabled it on. Adopting the vendor's native type would emit proprietary `extra_body` the gateway never documented, and would break working OpenAI calls the moment a user ticked "thinking". |
+
+Two further rules hold for any gateway: `use_responses` is always `False` (the
+Responses API is a vendor-native endpoint; a gateway row published as
+chat-completions-only would 404), and an **unaliased vendor keeps the gateway's
+generic block** — the correct conservative default for the gateway's own
+self-hosted rows and for vendors we carry no block for.
+
+Locked by `tests/llm/test_llmtr_gateway.py`, which also asserts that Groq — which
+uses owner-qualified ids like `openai/gpt-oss-120b` but is a single vendor — does
+**not** take this branch.
 | `xai` | `providers/openai.py` + base_url | `openai` | OpenAI-compatible at `api.x.ai/v1` |
 | `deepseek` | `providers/openai.py` + base_url | `openai` | OpenAI-compatible at `api.deepseek.com` |
 | `kimi` | `providers/openai.py` + base_url | `openai` | Moonshot AI, OpenAI-compatible |
@@ -76,8 +100,8 @@ Source of truth for this list: `server/config/llm_defaults.json` (the `providers
 
 ### Native chat path vs agent dropdown — two different counts
 
-- **Native chat path (`execute_chat` / `fetch_models`) supports 13 providers, all native** — Anthropic and Gemini via their own SDKs; OpenAI and OpenRouter via the openai SDK; and 9 more through the shared OpenAI-compatible client with a per-provider `base_url` (xai, deepseek, kimi, mistral, groq, cerebras, ollama, lmstudio, sarvam — registered in `providers/_compat.py`). `execute_chat` delegates every provider to `ChatUnifier.chat`; there is no per-provider branch. `xai` lives here.
-- **The agent dropdown exposes the same 13 providers** for `aiAgent`,
+- **Native chat path (`execute_chat` / `fetch_models`) supports 14 providers, all native** — Anthropic and Gemini via their own SDKs; OpenAI, OpenRouter and LLMTR via the openai SDK; and 9 more through the shared OpenAI-compatible client with a per-provider `base_url` (xai, deepseek, kimi, mistral, groq, cerebras, ollama, lmstudio, sarvam — registered in `providers/_compat.py`). `execute_chat` delegates every provider to `ChatUnifier.chat`; there is no per-provider branch. `xai` lives here.
+- **The agent dropdown exposes the same 14 providers** for `aiAgent`,
   `chatAgent` (Zeenie), and all specialized agents, including `xai`.
   `test_plugin_shape.py` asserts exact set equality between the registry and
   the `provider` Literal in all three agent Params classes, so registering a

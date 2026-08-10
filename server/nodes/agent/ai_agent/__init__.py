@@ -43,6 +43,7 @@ class AIAgentParams(BaseModel):
         "anthropic",
         "gemini",
         "openrouter",
+        "llmtr",
         "xai",
         "groq",
         "cerebras",

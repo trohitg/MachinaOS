@@ -56,11 +56,28 @@ DEFAULT_TEMP_RANGES = {
     "groq": (0.0, 2.0),
     "cerebras": (0.0, 1.5),
     "openrouter": (0.0, 2.0),
+    "llmtr": (0.0, 2.0),
     "deepseek": (0.0, 2.0),
     "kimi": (0.0, 1.0),
     "mistral": (0.0, 1.0),
     "sarvam": (0.0, 2.0),
 }
+
+#: Gateway providers — a single credential fronts many vendors, and model
+#: ids carry a ``vendor/`` prefix (``anthropic/claude-sonnet-5``) instead of
+#: naming the gateway. Two consequences drive :meth:`get_model_info`'s
+#: waterfall: the ``<gateway>/<vendor>/<model>`` key never exists in the
+#: cache, and the *vendor's* row already holds the correct context window
+#: and output ceiling. So for these providers only, the lookup is allowed
+#: to fall through to a cross-provider match and to a prefix-stripped
+#: match. Doing this for a single-vendor provider would be wrong — it would
+#: let a Groq model's limits answer for a DeepSeek request.
+#:
+#: The registry cache is populated from OpenRouter, so an LLMTR row
+#: resolves whenever the same model is also carried by OpenRouter (101 of
+#: LLMTR's 165 chat rows at time of writing). Everything else falls back to
+#: the ``_default`` context/output in llm_defaults.json.
+_ROUTER_PROVIDERS = frozenset({"openrouter", "llmtr"})
 
 
 # =============================================================================
@@ -200,7 +217,7 @@ class ModelRegistryService:
 
         1. Exact match on provider/model (tries dot/hyphen variants)
         2. Prefix match for versioned IDs
-        3. Cross-provider check (for OpenRouter models)
+        3. Cross-provider check (gateway providers — see _ROUTER_PROVIDERS)
         4. Returns None if not found
         """
         # Strip [FREE] prefix if present
@@ -220,15 +237,15 @@ class ModelRegistryService:
                     if variant.startswith(info.local_id) or info.local_id.startswith(variant):
                         return info
 
-        # 3. Cross-provider lookup (OpenRouter only - same model on different
+        # 3. Cross-provider lookup (gateways only - same model on different
         #    providers can have different context windows and limits)
-        if provider == "openrouter":
+        if provider in _ROUTER_PROVIDERS:
             for stored_key, info in self._models.items():
                 if info.local_id in variants:
                     return info
 
-        # 4. For OpenRouter, try stripping provider prefix from model
-        if provider == "openrouter" and "/" in model:
+        # 4. For gateways, try stripping the vendor prefix from the model
+        if provider in _ROUTER_PROVIDERS and "/" in model:
             _, local = model.split("/", 1)
             local_variants = self._model_variants(local)
             for stored_key, info in self._models.items():

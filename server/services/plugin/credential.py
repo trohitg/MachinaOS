@@ -78,6 +78,37 @@ def classify_credential_error(exc: BaseException, *, display_name: str) -> Probe
     """
     import openai  # local import: openai is a heavy SDK
 
+    from services.llm.protocol import LLMError, LLMErrorCategory
+
+    # A probe that goes through ``ChatUnifier`` with ``translate_errors=False``
+    # gets the unifier's normalized ``LLMError``, not the raw SDK exception —
+    # the SDK type was already consumed by ``LLMError.from_exception``. That
+    # is strictly MORE information (a typed category plus the HTTP status),
+    # so read it rather than letting it fall to the unknown-exception branch,
+    # which would splice the provider's raw 401 body — including its JSON
+    # envelope — into a user-facing toast.
+    #
+    # Checked before the openai branches because ``LLMError`` is not an
+    # ``openai`` type and would otherwise never match anything.
+    if isinstance(exc, LLMError):
+        if exc.status_code:
+            return _classify_status(exc.status_code, display_name)
+        # No status code: a transport-level failure the unifier classified
+        # without an HTTP response. Map the two categories that have a
+        # distinct user action; anything else keeps the safe category-based
+        # text ``user_message`` already produces.
+        if exc.category == LLMErrorCategory.TIMEOUT:
+            return ProbeResult(
+                valid=False,
+                message=f"Request to {display_name} timed out — try again or check the network.",
+            )
+        if exc.category == LLMErrorCategory.CONNECTION:
+            return ProbeResult(
+                valid=False,
+                message=f"Could not reach {display_name}. Is the server running?",
+            )
+        return ProbeResult(valid=False, message=exc.user_message)
+
     if isinstance(exc, httpx.TimeoutException) or isinstance(exc, openai.APITimeoutError):
         return ProbeResult(
             valid=False,

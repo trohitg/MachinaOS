@@ -22,11 +22,24 @@ from core.logging import get_logger
 
 logger = get_logger(__name__)
 
-EmbeddingProvider = Literal["huggingface", "openai", "ollama"]
+EmbeddingProvider = Literal["huggingface", "openai", "ollama", "llmtr"]
 DEFAULT_EMBEDDING_MODELS: Dict[str, str] = {
     "huggingface": "BAAI/bge-small-en-v1.5",
     "openai": "text-embedding-3-small",
     "ollama": "nomic-embed-text",
+    # LLMTR serves embeddings on the same OpenAI wire format as its chat
+    # route, so it reuses ``OpenAIEmbedder`` with a pinned base_url rather
+    # than adding an adapter. The default is LLMTR's own Turkey-hosted row
+    # (768 dims) — the cheapest of its catalogue and the one that keeps the
+    # data in-region, which is the reason to pick this gateway at all.
+    "llmtr": "llmtr/embeddinggemma-300m",
+}
+
+#: Endpoint for providers whose base URL we own rather than the user. Kept
+#: beside the default-model map so adding an OpenAI-compatible embedding
+#: gateway stays a two-line data change.
+_PINNED_EMBEDDING_ENDPOINTS: Dict[str, str] = {
+    "llmtr": "https://llmtr.com/v1",
 }
 
 
@@ -355,15 +368,22 @@ def create_embedder(
                 "'local-embeddings' extra."
             )
         return SentenceTransformerEmbedder(model_name)
-    if normalized == "openai":
+    if normalized in ("openai", "llmtr"):
         if not str(api_key or "").strip():
             raise EmbedderUnavailableError(
-                "OpenAI API key is required for embeddings."
+                f"{normalized} API key is required for embeddings."
             )
+        # A user-supplied endpoint still wins (self-hosted / regional
+        # deployments), but LLMTR needs no endpoint from the user — unlike
+        # plain OpenAI, where an empty endpoint means "the SDK default".
         return OpenAIEmbedder(
             model_name,
             api_key=api_key,
-            endpoint=normalized_endpoint or None,
+            endpoint=(
+                normalized_endpoint
+                or _PINNED_EMBEDDING_ENDPOINTS.get(normalized)
+                or None
+            ),
         )
     return OllamaEmbedder(
         model_name,

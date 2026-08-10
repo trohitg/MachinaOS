@@ -450,6 +450,8 @@ def detect_ai_provider(node_type: str, parameters: dict = None) -> str:
         return "groq"
     if "openrouter" in nt:
         return "openrouter"
+    if "llmtr" in nt:
+        return "llmtr"
     if "anthropic" in nt:
         return "anthropic"
     if "gemini" in nt:

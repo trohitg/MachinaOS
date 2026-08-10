@@ -622,68 +622,135 @@ class OpenAIProvider:
 
         from services.llm.config import LLM_DEFAULTS
 
-        config = LLM_DEFAULTS.get("providers", {}).get(self.provider_name, {})
-        reasoning_models = tuple(config.get("reasoning_models", ()))
-        is_reasoning = any(model.startswith(prefix) for prefix in reasoning_models)
-        if self.provider_name == "openai":
-            is_reasoning = is_reasoning or model.startswith(("o1", "o3", "o4"))
-        thinking_models = tuple(config.get("thinking_models", ()))
-        is_configured_thinking_model = any(
-            model.startswith(prefix) or prefix in model
-            for prefix in thinking_models
+        providers = LLM_DEFAULTS.get("providers", {})
+        config = providers.get(self.provider_name, {})
+
+        # --- gateway indirection -------------------------------------------
+        # A gateway (LLMTR; OpenRouter if it opts in via the JSON flag) fronts
+        # many vendors and names models ``vendor/model``. Two DIFFERENT sources
+        # of truth apply to such a request, and conflating them breaks calls in
+        # both directions — so they are resolved separately below:
+        #
+        #   wire shape  -> the VENDOR's block. ``max_completion_tokens`` vs
+        #       ``max_tokens``, and whether ``temperature`` may be sent at all,
+        #       are properties of the model that ultimately serves the request:
+        #       ``openai/o4-mini`` refuses ``max_tokens`` + ``temperature``
+        #       whether reached directly or through a proxy. Using the
+        #       gateway's necessarily-generic block sent both and earned a 400
+        #       the gateway could only report as "the model provider rejected
+        #       the request" — observed live on o4-mini and gpt-5-nano.
+        #
+        #   thinking    -> the GATEWAY's block. Reasoning controls are NOT
+        #       forwarded vendor-natively: LLMTR normalizes every vendor onto
+        #       ``reasoning_effort`` (its Claude and Gemini rows accept it even
+        #       though those vendors natively take token budgets), silently
+        #       drops an ``extra_body`` budget, and rejects the parameter
+        #       outright — 400, ``details.supportsReasoningToggle: false`` —
+        #       for models it has not enabled it on, which at the time of
+        #       writing includes every ``openai/*`` row. Adopting the vendor's
+        #       native thinking type here would emit Anthropic/Moonshot
+        #       proprietary ``extra_body`` the gateway never documented, and
+        #       would turn a working OpenAI call into a 400 the moment a user
+        #       ticked "thinking".
+        #
+        # Opt-in per gateway via ``routes_vendor_prefixed_models`` so no
+        # existing provider changes behaviour, and the prefix→provider-key
+        # mapping is declared in JSON (``vendor_aliases``) rather than
+        # hardcoded here, because it is the gateway's naming, not ours.
+        shape_config = config
+        shape_provider = self.provider_name
+        shape_model = model
+        routed_through_gateway = False
+        if config.get("routes_vendor_prefixed_models") and "/" in model:
+            vendor, local = model.split("/", 1)
+            vendor = config.get("vendor_aliases", {}).get(vendor, vendor)
+            vendor_config = providers.get(vendor)
+            # An unknown vendor (the gateway's own self-hosted rows, or a
+            # vendor we carry no block for) keeps the gateway's generic
+            # shape — the correct conservative default.
+            if vendor_config:
+                shape_config = vendor_config
+                shape_provider = vendor
+                shape_model = local
+                routed_through_gateway = True
+
+        # --- wire shape (vendor-sourced when routed) ------------------------
+        reasoning_models = tuple(shape_config.get("reasoning_models", ()))
+        is_reasoning = any(shape_model.startswith(p) for p in reasoning_models)
+        if shape_provider == "openai":
+            is_reasoning = is_reasoning or shape_model.startswith(("o1", "o3", "o4"))
+        shape_thinking_models = tuple(shape_config.get("thinking_models", ()))
+        is_shape_thinking_model = any(
+            shape_model.startswith(p) or p in shape_model
+            for p in shape_thinking_models
         )
         openai_reasoning_capable = (
-            self.provider_name == "openai"
-            and (is_reasoning or is_configured_thinking_model)
+            shape_provider == "openai"
+            and (is_reasoning or is_shape_thinking_model)
         )
 
         fixed_temperature = None
-        for prefix, value in config.get("fixed_temperature", {}).items():
-            if model.startswith(prefix):
+        for prefix, value in shape_config.get("fixed_temperature", {}).items():
+            if shape_model.startswith(prefix):
                 fixed_temperature = float(value)
                 break
 
-        supported = set(config.get("supported_params", ()))
+        supported = set(shape_config.get("supported_params", ()))
         temperature_allowed = not is_reasoning and not openai_reasoning_capable
         if supported and "temperature" not in supported:
             temperature_allowed = False
 
+        # --- thinking (always the caller's own provider block) --------------
+        # ``config`` is deliberately still the gateway's when routed.
         default_on = any(
             model.startswith(prefix)
             for prefix in config.get("thinking_default_on", ())
+        )
+        thinking_models = tuple(config.get("thinking_models", ()))
+        is_configured_thinking_model = any(
+            model.startswith(p) or p in model for p in thinking_models
         )
         thinking_type = config.get("thinking_type", "none")
         supports_configured_thinking = (
             not thinking_models
             or is_configured_thinking_model
-            or is_reasoning
+            or (is_reasoning and not routed_through_gateway)
         )
         if not supports_configured_thinking:
             thinking_type = "none"
 
         # GPT-5 and o-series models use reasoning effort. Groq's GPT-OSS
         # models also use reasoning_effort; reasoning_format is explicitly
-        # unsupported for those models and is reserved for Qwen.
-        if self.provider_name == "openai" and (
-            model.startswith("gpt-5") or is_reasoning
-        ):
-            thinking_type = "effort"
-        elif self.provider_name == "groq" and (
-            model.startswith("openai/gpt-oss-")
-            or model.startswith("gpt-oss-")
-        ):
-            thinking_type = "effort"
+        # unsupported for those models and is reserved for Qwen. Both are
+        # direct-vendor rules, hence the gateway guard.
+        if not routed_through_gateway:
+            if self.provider_name == "openai" and (
+                model.startswith("gpt-5") or is_reasoning
+            ):
+                thinking_type = "effort"
+            elif self.provider_name == "groq" and (
+                model.startswith("openai/gpt-oss-")
+                or model.startswith("gpt-oss-")
+            ):
+                thinking_type = "effort"
 
         return {
             "max_completion_tokens": (
                 openai_reasoning_capable
             ),
+            # The Responses API is a VENDOR-NATIVE endpoint, so a gateway
+            # never takes this path even when the routed model would
+            # qualify: we would POST /v1/responses to the gateway for a row
+            # its own catalogue publishes as chat-completions-only. LLMTR's
+            # listing already excludes its genuine RESPONSES rows, so the
+            # models reachable here are exactly the ones that must stay on
+            # /v1/chat/completions.
             "use_responses": (
-                openai_reasoning_capable
+                openai_reasoning_capable and not routed_through_gateway
             ),
             "temperature_allowed": temperature_allowed
             and not (
-                self.provider_name == "openai"
+                shape_provider == "openai"
                 and thinking is not None
                 and thinking.enabled
                 and thinking_type == "effort"

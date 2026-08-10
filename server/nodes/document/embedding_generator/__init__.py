@@ -15,13 +15,20 @@ from services.plugin import ActionNode, NodeContext, NodeUserError, Operation, T
 
 class EmbeddingGeneratorParams(BaseModel):
     chunks: List[Optional[dict]] = Field(default_factory=list)
-    provider: Literal["huggingface", "openai", "ollama"] = Field(
+    provider: Literal["huggingface", "openai", "ollama", "llmtr"] = Field(
         default="huggingface",
-        description="Embedding provider. HuggingFace runs locally; OpenAI needs API key; Ollama connects to local server.",
+        description=(
+            "Embedding provider. HuggingFace runs locally; OpenAI and LLMTR "
+            "need an API key; Ollama connects to a local server."
+        ),
     )
     model: str = Field(
         default="BAAI/bge-small-en-v1.5",
-        description="Model name (provider-specific). HuggingFace: BAAI/bge-*. OpenAI: text-embedding-3-small.",
+        description=(
+            "Model name (provider-specific). HuggingFace: BAAI/bge-*. "
+            "OpenAI: text-embedding-3-small. LLMTR: vendor-prefixed, e.g. "
+            "llmtr/embeddinggemma-300m or voyageai/voyage-4."
+        ),
     )
     batch_size: int = Field(
         default=32,
@@ -31,21 +38,22 @@ class EmbeddingGeneratorParams(BaseModel):
     )
     api_key: str = Field(
         default="",
-        description="API key (OpenAI only).",
+        description="API key (OpenAI and LLMTR).",
         json_schema_extra={
             "password": True,
-            "displayOptions": {"show": {"provider": ["openai"]}},
+            "displayOptions": {"show": {"provider": ["openai", "llmtr"]}},
         },
     )
     endpoint: str = Field(
         default="",
         description=(
-            "Optional provider endpoint. OpenAI uses it as base_url; "
-            "Ollama uses it as host."
+            "Optional provider endpoint. OpenAI and LLMTR use it as base_url; "
+            "Ollama uses it as host. Leave empty for LLMTR unless you run a "
+            "self-hosted deployment — llmtr.com is used by default."
         ),
         json_schema_extra={
             "displayOptions": {
-                "show": {"provider": ["openai", "ollama"]}
+                "show": {"provider": ["openai", "ollama", "llmtr"]}
             }
         },
     )
