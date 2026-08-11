@@ -73,7 +73,7 @@ colorama==0.4.6
     #   pytest
     #   qrcode
     #   tqdm
-crawlee==1.8.1
+crawlee==1.9.0
     # via opencompany-server
 cryptography==50.0.0
     # via
