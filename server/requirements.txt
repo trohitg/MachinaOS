@@ -485,7 +485,7 @@ wsproto==1.3.2
     # via httpx-ws
 xdk==0.9.0
     # via opencompany-server
-yarl==1.24.2
+yarl==1.24.5
     # via
     #   aiohttp
     #   crawlee
