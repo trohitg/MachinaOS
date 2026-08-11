@@ -231,7 +231,7 @@ oauthlib==3.3.1
     # via requests-oauthlib
 ollama==0.6.2
     # via opencompany-server
-openai==2.45.0
+openai==2.53.0
     # via
     #   opencompany-server
     #   rlms
