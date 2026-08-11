@@ -268,7 +268,7 @@ propcache==0.5.2
     #   yarl
 protego==0.6.2
     # via crawlee
-proto-plus==1.28.1
+proto-plus==1.28.2
     # via google-api-core
 protobuf==7.35.1
     # via
