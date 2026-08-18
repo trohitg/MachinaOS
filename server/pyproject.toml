@@ -176,7 +176,7 @@ dependencies = [
     # wheels on PyPI (cp310-cp314, win/mac/linux), so a normal dep — NOT
     # the pooch/npm lazy-binary pattern (that's for non-PyPI binaries).
     # Pinned because pre-1.0 (alpha; API still moving fast).
-    "pydantic-monty==0.0.18",
+    "pydantic-monty==0.0.21",
 ]
 
 [project.optional-dependencies]

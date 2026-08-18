@@ -315,7 +315,7 @@ pydantic==2.12.5
     #   xdk
 pydantic-core==2.41.5
     # via pydantic
-pydantic-monty==0.0.18
+pydantic-monty==0.0.21
     # via opencompany-server
 pydantic-settings==2.15.0
     # via
