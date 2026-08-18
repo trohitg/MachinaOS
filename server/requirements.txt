@@ -483,7 +483,7 @@ watchfiles==1.2.0
     # via uvicorn
 webencodings==0.5.1
     # via html5lib
-websockets==16.1.1
+websockets==17.0.1
     # via
     #   google-genai
     #   opencompany-server
