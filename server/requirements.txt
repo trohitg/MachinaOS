@@ -130,7 +130,7 @@ google-auth-httplib2==0.4.1
     # via google-api-python-client
 google-auth-oauthlib==1.4.0
     # via opencompany-server
-google-genai==2.11.0
+google-genai==2.17.0
     # via
     #   opencompany-server
     #   rlms
