@@ -72,7 +72,7 @@ dependencies = [
     # Native LLM SDKs. OpenAI also drives the eight OpenAI-compatible
     # providers through configured base URLs.
     "openai==2.53.0",
-    "anthropic==0.96.0",
+    "anthropic==0.121.0",
     "google-genai==2.11.0",
 
     # Pydantic 2.13 changed validator ordering; pin to main's 2.12 line

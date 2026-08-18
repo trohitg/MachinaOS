@@ -14,7 +14,7 @@ annotated-doc==0.0.5
     # via fastapi
 annotated-types==0.8.0
     # via pydantic
-anthropic==0.96.0
+anthropic==0.121.0
     # via
     #   opencompany-server
     #   rlms
