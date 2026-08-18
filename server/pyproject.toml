@@ -156,7 +156,7 @@ dependencies = [
     # on every run, so an unbounded constraint means an upstream major release
     # breaks the build with no change on our side -- which is exactly what
     # happened. Lift the cap together with the FastMCP migration.
-    "mcp>=1.0.0,<2",
+    "mcp>=1.0.0,<3",
 
     # PTY transports — drive `claude` interactive TUI cross-platform.
     # POSIX uses ptyprocess (wraps forkpty) for `loop.add_reader`-friendly
