@@ -217,7 +217,7 @@ markdown-it-py==4.2.0
     # via
     #   opencompany-server
     #   rich
-mcp==1.29.0
+mcp==2.0.0
     # via opencompany-server
 mdurl==0.1.2
     # via markdown-it-py
