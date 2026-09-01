@@ -350,6 +350,7 @@ class LLMError(Exception):
             "gemini": "Gemini",
             "openai": "OpenAI",
             "openrouter": "OpenRouter",
+            "llmtr": "LLMTR",
             "groq": "Groq",
             "cerebras": "Cerebras",
             "xai": "xAI",

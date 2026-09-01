@@ -40,6 +40,7 @@ class SpecializedAgentParams(BaseModel):
         "anthropic",
         "gemini",
         "openrouter",
+        "llmtr",
         "xai",
         "groq",
         "cerebras",

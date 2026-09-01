@@ -22,6 +22,7 @@
     "anthropicChatModel",
     "geminiChatModel",
     "sarvamChatModel",
+    "llmtrChatModel",
 
     "calculatorTool",
     "currentTimeTool",

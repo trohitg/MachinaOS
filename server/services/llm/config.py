@@ -114,12 +114,12 @@ def detect_provider_from_model(model: str) -> str:
 
 
 def is_model_valid_for_provider(model: str, provider: str) -> bool:
-    # Open-world providers — OpenRouter is a multi-vendor proxy, Ollama and
-    # LM Studio serve user-installed models, and Groq's owner-qualified model
-    # IDs (for example ``openai/gpt-oss-120b``) do not contain "groq".
-    # Treat them as provider-selected; the upstream API will return a clear
-    # 404 for a genuinely missing model.
-    if provider in ("openrouter", "ollama", "lmstudio", "groq"):
+    # Open-world providers — OpenRouter and LLMTR are multi-vendor proxies,
+    # Ollama and LM Studio serve user-installed models, and Groq's
+    # owner-qualified model IDs (for example ``openai/gpt-oss-120b``) do not
+    # contain "groq". Treat them as provider-selected; the upstream API will
+    # return a clear 404 for a genuinely missing model.
+    if provider in ("openrouter", "llmtr", "ollama", "lmstudio", "groq"):
         return True
     cfg = PROVIDER_CONFIGS.get(provider)
     if not cfg:

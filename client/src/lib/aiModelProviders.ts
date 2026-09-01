@@ -13,6 +13,7 @@ const AI_MODEL_PROVIDERS = [
   'anthropic',
   'gemini',
   'openrouter',
+  'llmtr',
   'groq',
   'cerebras',
   'deepseek',
