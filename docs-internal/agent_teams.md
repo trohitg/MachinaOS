@@ -8,8 +8,22 @@ leads cannot receive team tasks.
 ## Runtime model
 
 1. `build_teammate_descriptors()` expands connected agents into stable
-   identities containing node ID, type, label, capability description,
-   provider/model configuration, and the child's connected tools and skills.
+   identities (node ID, type, label, `delegate_tool_name`).
+   `collect_teammate_connections()` enriches each with the teammate's
+   parameters, `child_tools` (its `input-tools` edges), `child_skills` (its
+   `input-skill` edges, Master Skill nodes expanded to their enabled
+   entries) and a rendered `capabilities` sentence:
+   `tools: TikHub (Scrape TikTok, Douyin, ...); skills: tikhub-skill (...)`.
+   Tool blurbs come from the plugin's `description` ClassVar, skill blurbs
+   from the SKILL.md frontmatter description; the runtime `skill` entry and
+   `*-personality` skills are skipped. `format_teammate_roster_line()` turns
+   that into the one line per teammate both runtimes put in the lead's
+   system prompt (`- <node_id>: <label> (<type>) - <capabilities>`). This
+   roster is the lead's ONLY view of what a teammate can do, because the
+   `delegate_to_*` tools that carry the long capability description are
+   hidden from the lead's model (point 4), so a teammate labelled "Web
+   Agent" holding TikHub would otherwise be indistinguishable from one
+   holding nothing. Locked by `tests/test_team_topology.py`.
 2. Task Manager is intrinsically and non-removably bound to every team lead.
    It is not a palette node or an Agent Builder-addable tool.
 3. The lead delegates only by calling `task_manager` with

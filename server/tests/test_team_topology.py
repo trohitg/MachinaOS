@@ -108,3 +108,57 @@ def test_import_remap_normalizes_legacy_handle():
     _, [remapped], _ = remap_node_ids(nodes, [edge("worker", "lead", legacy=True)])
     assert remapped["targetHandle"] == "input-teammates"
     assert "target_handle" not in remapped
+
+
+@pytest.mark.asyncio
+async def test_teammate_capabilities_surface_tools_and_skills():
+    """The lead's roster is the only place a teammate's tools and skills are
+    visible (delegate tools are hidden from the lead's model), so the
+    descriptor must carry a rendered capability sentence built from the
+    tool plugin's description and the enabled Master Skill descriptions."""
+    from services.plugin.edge_walker import describe_teammate_capabilities, format_teammate_roster_line
+
+    nodes = [
+        node("lead", "orchestrator_agent"),
+        node("web", "aiAgent", "Web Agent"),
+        node("tikhub", "tikhubAction", "TikHub"),
+        node("skills", "masterSkill", "Master Skill"),
+    ]
+    edges = [edge("web", "lead"), edge("tikhub", "web", "input-tools"), edge("skills", "web", "input-skill")]
+    params = {
+        "skills": {
+            "skills_config": {
+                "skill": {"enabled": True, "required": True},
+                "assistant-personality": {"enabled": True},
+                "tikhub-skill": {"enabled": True},
+                "apify-skill": {"enabled": False},
+            }
+        }
+    }
+    database = AsyncMock()
+    database.get_node_parameters.side_effect = lambda node_id: params.get(node_id, {})
+
+    [teammate] = await collect_teammate_connections("lead", {"nodes": nodes, "edges": edges}, database)
+
+    assert teammate["child_tools"] == [{"node_id": "tikhub", "node_type": "tikhubAction", "label": "TikHub"}]
+    assert [s["skill_name"] for s in teammate["child_skills"]] == ["tikhub-skill"]
+    assert teammate["child_skills"][0]["description"]  # SKILL.md frontmatter text
+
+    capabilities = teammate["capabilities"]
+    assert capabilities.startswith("tools: TikHub (")
+    assert "Douyin" in capabilities  # from TikHubActionNode.description
+    assert "skills: tikhub-skill (" in capabilities
+    assert "assistant-personality" not in capabilities and "apify-skill" not in capabilities
+    assert capabilities == describe_teammate_capabilities(teammate["child_tools"], teammate["child_skills"])
+
+    line = format_teammate_roster_line(teammate)
+    assert line.startswith("- web: Web Agent (aiAgent) - tools: TikHub (")
+    assert "skills: tikhub-skill" in line
+
+
+def test_roster_line_omits_empty_capabilities():
+    from services.plugin.edge_walker import format_teammate_roster_line
+
+    bare = {"node_id": "x", "label": "Coder", "node_type": "coding_agent"}
+    assert format_teammate_roster_line(bare) == "- x: Coder (coding_agent)"
+    assert format_teammate_roster_line({**bare, "capabilities": ""}) == "- x: Coder (coding_agent)"

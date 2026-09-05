@@ -105,6 +105,8 @@ async def prepare_agent_call(
                         "label": tm["label"],
                         "parameters": tm.get("parameters", {}),
                         "child_tools": tm.get("child_tools", []),
+                        "child_skills": tm.get("child_skills", []),
+                        "capabilities": tm.get("capabilities", ""),
                         "delegate_tool_name": tm["delegate_tool_name"],
                     }
                 )

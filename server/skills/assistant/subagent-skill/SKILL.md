@@ -41,6 +41,12 @@ durable runner continues the work and `taskTrigger` starts the later review.
 
 ## Capability matching
 
+Every line in the connected teammate list ends with that agent's connected
+tools and skills, for example
+`- web_1: Web Agent (aiAgent) - tools: TikHub (Scrape TikTok, Douyin, ...); skills: tikhub-skill (...)`.
+Match the work to those tools and skills first; the agent type is only a
+fallback when the line carries no capability clause.
+
 - Android agents: connected Android device services.
 - Coding agents: implementation, code analysis, tests, and computation.
 - Web agents: browsing, HTTP, extraction, and web interaction.

@@ -333,6 +333,24 @@ paste the key from the TikHub user portal (tikhub.io -> API Keys) and
 click Validate - the modal shows the account email and balance when the
 key is accepted.
 
+## Working inside a team
+
+When this node is wired to a teammate rather than directly to the lead, the
+lead never sees the `tikhub_action` tool itself. It sees one roster line per
+teammate that lists the teammate's connected tools and skills, built from
+this node's description and this skill's description, and it assigns work
+through `task_manager` with a bounded mission. As the teammate holding
+TikHub:
+
+1. Treat the mission as the query: pick the platform from the URL or the
+   wording, run `list_endpoints` if the endpoint id is not obvious, then
+   `call` or `fetch_url`.
+2. Return the extracted fields the mission asked for, not the raw TikHub
+   payload. Include the endpoint id used, the count of items, and the total
+   `cost_usd` so the lead can report spend.
+3. If the key is missing or the balance is exhausted, say so in the result
+   verbatim so the lead can escalate to the user; do not retry blindly.
+
 ## Best practices
 
 1. **Prefer `fetch_url` for any share URL.** One request, no id

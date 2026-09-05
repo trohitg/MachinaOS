@@ -550,6 +550,129 @@ def extract_task_event_payload(value: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
+# Cap on each tool / skill blurb inside a teammate's capability summary.
+# The summary rides the lead's system prompt once per teammate, so it must
+# stay a roster line, not a manual: full instructions live on the teammate.
+_CAPABILITY_BLURB_CHARS = 160
+# Master-Skill entries that describe the agent runtime rather than a domain
+# capability. They are enabled on every Master Skill node and would only add
+# noise to a roster.
+_ROSTER_SKIPPED_SKILLS = frozenset({"skill"})
+
+
+def _clip(text: str, limit: int = _CAPABILITY_BLURB_CHARS) -> str:
+    text = " ".join(str(text or "").split())
+    return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."
+
+
+def _tool_blurb(node_type: str) -> str:
+    """One-line, human-facing capability text for a tool node type.
+
+    Prefers the plugin's ``description`` ClassVar (a sentence written for
+    people) over ``tool_description`` (an instruction block written for the
+    model that holds the tool) so a lead's roster stays readable.
+    """
+    from services.node_registry import get_node_class
+
+    cls = get_node_class(node_type)
+    if cls is None:
+        return ""
+    return _clip(
+        (getattr(cls, "description", "") or "").strip()
+        or (getattr(cls, "tool_description", "") or "").strip()
+    )
+
+
+async def _teammate_child_skills(
+    teammate_id: str,
+    nodes: List[Dict[str, Any]],
+    edges: List[Dict[str, Any]],
+    database: "Database",
+) -> List[Dict[str, Any]]:
+    """Skills wired to a teammate's ``input-skill`` handle, with descriptions.
+
+    Master Skill nodes expand to their enabled entries; the description is
+    the SKILL.md frontmatter text (or the per-node override), the same value
+    the teammate's own ``Skill`` catalogue shows. Personality and runtime
+    skills are skipped: they shape how the agent behaves, not what it can
+    do for the lead.
+    """
+    skills: List[Dict[str, Any]] = []
+    registry = None
+    for edge in edges:
+        if edge.get("target") != teammate_id or edge_target_handle(edge) != "input-skill":
+            continue
+        child = next((n for n in nodes if n.get("id") == edge.get("source")), None)
+        if not child:
+            continue
+        params = await database.get_node_parameters(child.get("id")) or {}
+        if child.get("type") == "masterSkill":
+            skills_config = params.get("skills_config") or {}
+            if not isinstance(skills_config, dict):
+                continue
+            for skill_key, skill_cfg in skills_config.items():
+                if not isinstance(skill_cfg, dict) or not skill_cfg.get("enabled", False):
+                    continue
+                if skill_key in _ROSTER_SKIPPED_SKILLS or skill_key.endswith("-personality"):
+                    continue
+                if registry is None:
+                    from services.skill_loader import get_skill_loader
+
+                    try:
+                        registry = get_skill_loader().scan_skills()
+                    except Exception as exc:  # noqa: BLE001 - a roster must never fail a run
+                        logger.warning("[Teams] skill registry unavailable for roster: %s", exc)
+                        registry = {}
+                meta = registry.get(skill_key)
+                description = skill_cfg.get("description") or (meta.description if meta else "")
+                skills.append({"node_id": child.get("id"), "skill_name": skill_key, "description": _clip(description)})
+        else:
+            skill_name = params.get("skill_name") or (child.get("data") or {}).get("label") or child.get("type")
+            skills.append({"node_id": child.get("id"), "skill_name": str(skill_name), "description": ""})
+    return skills
+
+
+def describe_teammate_capabilities(
+    child_tools: List[Dict[str, Any]],
+    child_skills: List[Dict[str, Any]],
+) -> str:
+    """Render a teammate's connected tools and skills as one roster sentence.
+
+    ``"tools: TikHub (Scrape TikTok, Douyin, ...); skills: tikhub-skill
+    (...)"``. Empty when the teammate has neither, so callers can omit the
+    clause entirely.
+    """
+    parts: List[str] = []
+    tool_bits = []
+    for tool in child_tools:
+        label = str(tool.get("label") or tool.get("node_type") or "")
+        blurb = _tool_blurb(str(tool.get("node_type") or ""))
+        tool_bits.append(f"{label} ({blurb})" if blurb else label)
+    if tool_bits:
+        parts.append("tools: " + ", ".join(tool_bits))
+    skill_bits = []
+    for skill in child_skills:
+        name = str(skill.get("skill_name") or "")
+        blurb = str(skill.get("description") or "")
+        skill_bits.append(f"{name} ({blurb})" if blurb else name)
+    if skill_bits:
+        parts.append("skills: " + ", ".join(skill_bits))
+    return "; ".join(parts)
+
+
+def format_teammate_roster_line(info: Dict[str, Any]) -> str:
+    """The one line a lead sees per teammate, shared by both runtimes.
+
+    ``- <node_id>: <label> (<node_type>) - <capabilities>``. The capability
+    clause is what lets a lead match work to the agent holding the right
+    tool; without it a teammate labelled "Web Agent" carrying TikHub is
+    indistinguishable from one carrying nothing.
+    """
+    line = f"- {info.get('node_id')}: {info.get('label') or info.get('node_type')} ({info.get('node_type')})"
+    capabilities = str(info.get("capabilities") or "").strip()
+    return f"{line} - {capabilities}" if capabilities else line
+
+
 async def collect_teammate_connections(
     node_id: str,
     context: Dict[str, Any],
@@ -557,7 +680,11 @@ async def collect_teammate_connections(
 ) -> List[Dict[str, Any]]:
     """Walk ``input-teammates`` edges and return connected agents.
 
-    Used by ``orchestrator_agent`` / ``ai_employee``.
+    Used by ``orchestrator_agent`` / ``ai_employee``. Each teammate carries
+    its ``child_tools`` (``input-tools`` edges), ``child_skills``
+    (``input-skill`` edges) and a rendered ``capabilities`` sentence: the
+    text the lead's roster shows, since the delegate tools themselves are
+    hidden from the lead's model.
     """
     teammates: List[Dict[str, Any]] = []
     descriptors = build_teammate_descriptors(node_id, context)
@@ -577,7 +704,14 @@ async def collect_teammate_connections(
                     "node_type": child.get("type"),
                     "label": (child.get("data") or {}).get("label", child.get("type")),
                 })
-        teammates.append({**descriptor, "parameters": params, "child_tools": child_tools})
+        child_skills = await _teammate_child_skills(source_id, nodes, edges, database)
+        teammates.append({
+            **descriptor,
+            "parameters": params,
+            "child_tools": child_tools,
+            "child_skills": child_skills,
+            "capabilities": describe_teammate_capabilities(child_tools, child_skills),
+        })
         logger.debug(f"[Teams] Found teammate: {descriptor['node_type']} ({source_id})")
 
     return teammates

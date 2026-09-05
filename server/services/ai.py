@@ -1655,10 +1655,9 @@ class AIService:
                 task_manager_bound = any(info.get("node_type") == "taskManager" for info in effective_tool_data)
                 durable_delegates = [info for info in effective_tool_data if info.get("delegate_tool_name")]
                 if task_manager_bound and durable_delegates:
-                    teammate_lines = "\n".join(
-                        f"- {info.get('node_id')}: {info.get('label') or info.get('node_type')} ({info.get('node_type')})"
-                        for info in durable_delegates
-                    )
+                    from services.plugin.edge_walker import format_teammate_roster_line
+
+                    teammate_lines = "\n".join(format_teammate_roster_line(info) for info in durable_delegates)
                     system_message += (
                         "\n\n## Durable Team Delegation\n"
                         "All teammate assignments MUST use task_manager with operation='assign_task'. "

@@ -269,6 +269,21 @@ dormant - the manual tracker does the work, because the framework's
 cost hook fires per operation and cannot know whether the call was
 billed.
 
+## Team visibility
+
+A team lead (`orchestrator_agent` / `ai_employee`) never sees a teammate's
+tools directly: the `delegate_to_*` tool that carries `tool_description` is
+hidden from the lead's model. What the lead sees is the roster line
+`collect_teammate_connections()` renders per teammate
+(`services/plugin/edge_walker.py::format_teammate_roster_line`), which
+lists the teammate's connected tools by the plugin `description` ClassVar
+and its Master Skill entries by SKILL.md description. So when `tikhubAction`
+hangs off a subagent, the lead's prompt reads
+`- web_1: Web Agent (aiAgent) - tools: TikHub (Scrape TikTok, Douyin, ...); skills: tikhub-skill (...)`.
+Keep `TikHubActionNode.description` and the skill's frontmatter
+`description` written as capability sentences for that reason. See
+[agent_teams.md](./agent_teams.md).
+
 ## SDK version-bump recipe
 
 1. Edit the pin in `server/pyproject.toml` (`"tikhub>=2.1.2,<3"` - keep

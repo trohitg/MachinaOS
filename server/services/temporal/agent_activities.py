@@ -1109,10 +1109,10 @@ async def prepare_agent_payload(context: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     if any(tool["name"].startswith("delegate_to_") for tool in tools_payload):
+        from services.plugin.edge_walker import format_teammate_roster_line
+
         delegates = "\n".join(
-            f"- {(tool.get('tool_info') or {}).get('node_id')}: "
-            f"{(tool.get('tool_info') or {}).get('label', tool['node_type'])} "
-            f"({tool['node_type']})"
+            format_teammate_roster_line({**(tool.get("tool_info") or {}), "node_type": tool["node_type"]})
             for tool in tools_payload
             if tool["name"].startswith("delegate_to_")
         )
